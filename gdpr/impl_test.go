@@ -9,8 +9,9 @@ import (
 	"github.com/prebid/go-gdpr/consentconstants"
 	"github.com/prebid/go-gdpr/vendorlist"
 	"github.com/prebid/go-gdpr/vendorlist2"
-	"github.com/prebid/prebid-server/v2/config"
-	"github.com/prebid/prebid-server/v2/openrtb_ext"
+	"github.com/prebid/prebid-server/v3/config"
+	"github.com/prebid/prebid-server/v3/metrics"
+	"github.com/prebid/prebid-server/v3/openrtb_ext"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -335,9 +336,8 @@ func TestAllowActivities(t *testing.T) {
 		perms.gdprSignal = tt.gdpr
 		perms.publisherID = tt.publisherID
 
-		permissions, err := perms.AuctionActivitiesAllowed(context.Background(), tt.bidderCoreName, tt.bidderName)
+		permissions := perms.AuctionActivitiesAllowed(context.Background(), tt.bidderCoreName, tt.bidderName)
 
-		assert.Nil(t, err, tt.description)
 		assert.Equal(t, tt.passID, permissions.PassID, tt.description)
 	}
 }
@@ -437,8 +437,7 @@ func TestAllowActivitiesBidderWithoutGVLID(t *testing.T) {
 				purposeEnforcerBuilder: NewPurposeEnforcerBuilder(&tcf2AggConfig),
 			}
 
-			permissions, err := perms.AuctionActivitiesAllowed(context.Background(), bidderWithoutGVLID, bidderWithoutGVLID)
-			assert.NoError(t, err)
+			permissions := perms.AuctionActivitiesAllowed(context.Background(), bidderWithoutGVLID, bidderWithoutGVLID)
 			assert.Equal(t, tt.allowBidRequest, permissions.AllowBidRequest)
 			assert.Equal(t, tt.passID, permissions.PassID)
 		})
@@ -658,8 +657,7 @@ func TestAllowActivitiesGeoAndID(t *testing.T) {
 		perms.consent = td.consent
 		perms.purposeEnforcerBuilder = NewPurposeEnforcerBuilder(&tcf2AggConfig)
 
-		permissions, err := perms.AuctionActivitiesAllowed(context.Background(), td.bidderCoreName, td.bidder)
-		assert.NoErrorf(t, err, "Error processing AuctionActivitiesAllowed for %s", td.description)
+		permissions := perms.AuctionActivitiesAllowed(context.Background(), td.bidderCoreName, td.bidder)
 		assert.EqualValuesf(t, td.allowBidRequest, permissions.AllowBidRequest, "AllowBid failure on %s", td.description)
 		assert.EqualValuesf(t, td.passGeo, permissions.PassGeo, "PassGeo failure on %s", td.description)
 		assert.EqualValuesf(t, td.passID, permissions.PassID, "PassID failure on %s", td.description)
@@ -695,8 +693,7 @@ func TestAllowActivitiesWhitelist(t *testing.T) {
 	}
 
 	// Assert that an item that otherwise would not be allowed PI access, gets approved because it is found in the GDPR.NonStandardPublishers array
-	permissions, err := perms.AuctionActivitiesAllowed(context.Background(), openrtb_ext.BidderAppnexus, openrtb_ext.BidderAppnexus)
-	assert.NoErrorf(t, err, "Error processing AuctionActivitiesAllowed")
+	permissions := perms.AuctionActivitiesAllowed(context.Background(), openrtb_ext.BidderAppnexus, openrtb_ext.BidderAppnexus)
 	assert.EqualValuesf(t, true, permissions.PassGeo, "PassGeo failure")
 	assert.EqualValuesf(t, true, permissions.PassID, "PassID failure")
 }
@@ -767,8 +764,7 @@ func TestAllowActivitiesPubRestrict(t *testing.T) {
 		perms.aliasGVLIDs = td.aliasGVLIDs
 		perms.consent = td.consent
 
-		permissions, err := perms.AuctionActivitiesAllowed(context.Background(), td.bidderCoreName, td.bidder)
-		assert.NoErrorf(t, err, "Error processing AuctionActivitiesAllowed for %s", td.description)
+		permissions := perms.AuctionActivitiesAllowed(context.Background(), td.bidderCoreName, td.bidder)
 		assert.EqualValuesf(t, td.passGeo, permissions.PassGeo, "PassGeo failure on %s", td.description)
 		assert.EqualValuesf(t, td.passID, permissions.PassID, "PassID failure on %s", td.description)
 	}
@@ -888,8 +884,8 @@ func parseVendorListDataV2(t *testing.T, data string) vendorlist.VendorList {
 	return parsed
 }
 
-func listFetcher(specVersionLists map[uint16]map[uint16]vendorlist.VendorList) func(context.Context, uint16, uint16) (vendorlist.VendorList, error) {
-	return func(ctx context.Context, specVersion, listVersion uint16) (vendorlist.VendorList, error) {
+func listFetcher(specVersionLists map[uint16]map[uint16]vendorlist.VendorList) func(context.Context, uint16, uint16, metrics.MetricsEngine) (vendorlist.VendorList, error) {
+	return func(ctx context.Context, specVersion, listVersion uint16, metricsEngine metrics.MetricsEngine) (vendorlist.VendorList, error) {
 		if lists, ok := specVersionLists[specVersion]; ok {
 			if data, ok := lists[listVersion]; ok {
 				return data, nil
@@ -899,7 +895,7 @@ func listFetcher(specVersionLists map[uint16]map[uint16]vendorlist.VendorList) f
 	}
 }
 
-func failedListFetcher(ctx context.Context, specVersion, listVersion uint16) (vendorlist.VendorList, error) {
+func failedListFetcher(ctx context.Context, specVersion, listVersion uint16, metricsEngine metrics.MetricsEngine) (vendorlist.VendorList, error) {
 	return nil, errors.New("vendor list can't be fetched")
 }
 
@@ -1101,8 +1097,7 @@ func TestAllowActivitiesBidRequests(t *testing.T) {
 		perms.cfg = &tcf2AggConfig
 		perms.purposeEnforcerBuilder = NewPurposeEnforcerBuilder(&tcf2AggConfig)
 
-		permissions, err := perms.AuctionActivitiesAllowed(context.Background(), td.bidderCoreName, td.bidder)
-		assert.NoErrorf(t, err, "Error processing AuctionActivitiesAllowed for %s", td.description)
+		permissions := perms.AuctionActivitiesAllowed(context.Background(), td.bidderCoreName, td.bidder)
 		assert.EqualValuesf(t, td.allowBidRequest, permissions.AllowBidRequest, "AllowBid failure on %s", td.description)
 		assert.EqualValuesf(t, td.passGeo, permissions.PassGeo, "PassGeo failure on %s", td.description)
 		assert.EqualValuesf(t, td.passID, permissions.PassID, "PassID failure on %s", td.description)
@@ -1196,8 +1191,7 @@ func TestAllowActivitiesVendorException(t *testing.T) {
 		perms.cfg = &tcf2AggConfig
 		perms.purposeEnforcerBuilder = NewPurposeEnforcerBuilder(&tcf2AggConfig)
 
-		permissions, err := perms.AuctionActivitiesAllowed(context.Background(), td.bidderCoreName, td.bidder)
-		assert.NoErrorf(t, err, "Error processing AuctionActivitiesAllowed for %s", td.description)
+		permissions := perms.AuctionActivitiesAllowed(context.Background(), td.bidderCoreName, td.bidder)
 		assert.EqualValuesf(t, td.allowBidRequest, permissions.AllowBidRequest, "AllowBid failure on %s", td.description)
 		assert.EqualValuesf(t, td.passGeo, permissions.PassGeo, "PassGeo failure on %s", td.description)
 		assert.EqualValuesf(t, td.passID, permissions.PassID, "PassID failure on %s", td.description)
